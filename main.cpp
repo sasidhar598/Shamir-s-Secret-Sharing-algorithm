@@ -1,71 +1,78 @@
+
 #include <iostream>
-#include <vector>
+#include <fstream>
 #include <string>
-using namespace std;
+#include <cmath>
+#include <vector>
+#include <iomanip>      
+#include "json.hpp"    
 
-using bigint = __int128;
+using json = nlohmann::json;
 
-bigint toBigInt(const string& s, int base) {
-    bigint res = 0;
-    for (char c : s) {
-        int d = isdigit(c) ? c - '0' : toupper(c) - 'A' + 10;
-        res = res * base + d;
+double decodeBaseValue(const std::string &value, int base) {
+    double result = 0;
+    for (char ch : value) {
+        int digit = isdigit(ch) ? (ch - '0') : (tolower(ch) - 'a' + 10);
+        result = result * base + digit;
     }
-    return res;
+    return result;
 }
 
-string bigIntToStr(bigint n) {
-    if (n == 0) return "0";
-    string s;
-    bool neg = n < 0;
-    if (neg) n = -n;
-    while (n > 0) {
-        s = char('0' + n % 10) + s;
-        n /= 10;
+long long computeSecretFromJSON(const std::string &filename) {
+    std::ifstream file(filename);
+    if (!file) {
+        std::cerr << "Error: Cannot open file " << filename << std::endl;
+        return -1;
     }
-    return neg ? "-" + s : s;
-}
 
-bigint lagrange(const vector<bigint>& x, const vector<bigint>& y) {
-    int k = x.size();
-    bigint res = 0;
+    json j;
+    file >> j;
+
+    int n = j["keys"]["n"];
+    int k = j["keys"]["k"];
+
+    std::vector<std::pair<double, double>> points;
+
+    for (int count = 0, key = 1; count < k; ++key) {
+        std::string keyStr = std::to_string(key);
+        if (j.contains(keyStr)) {
+            std::string baseStr = j[keyStr]["base"];
+            std::string valStr = j[keyStr]["value"];
+
+            int base = std::stoi(baseStr);
+            double y = decodeBaseValue(valStr, base);
+            double x = key;
+            points.emplace_back(x, y);
+            count++;
+        }
+    }
+
+    double f0 = 0;
+
     for (int i = 0; i < k; ++i) {
-        bigint num = 1, den = 1;
-        for (int j = 0; j < k; ++j)
-            if (i != j) num *= -x[j], den *= x[i] - x[j];
-        res += y[i] * (num / den);
-    }
-    return res;
-}
+        double xi = points[i].first;
+        double yi = points[i].second;
 
-void solve1() {
-    vector<bigint> x = {1, 2, 3};
-    vector<bigint> y = {
-        toBigInt("4", 10),
-        toBigInt("111", 2),
-        toBigInt("12", 10)
-    };
-    cout << "Secret (c) from Testcase 1 = " << bigIntToStr(lagrange(x, y)) << endl;
-}
+        double li = 1;
+        for (int j = 0; j < k; ++j) {
+            if (j != i) {
+                double xj = points[j].first;
+                li *= (-xj) / (xi - xj);
+            }
+        }
 
-void solve2() {
-    vector<string> vals = {
-        "13444211440455345511", "aed7015a346d63", "6aeeb69631c227c", "e1b5e05623d881f",
-        "316034514573652620673", "2122212201122002221120200210011020220200",
-        "20120221122211000100210021102001201112121", "20220554335330240002224253",
-        "45153788322a1255483", "1101613130313526312514143"
-    };
-    vector<int> bases = {6, 15, 15, 16, 8, 3, 3, 6, 12, 7};
-    vector<bigint> x, y;
-    for (int i = 0; i < 7; ++i) {
-        x.push_back(i + 1);
-        y.push_back(toBigInt(vals[i], bases[i]));
+        f0 += yi * li;
     }
-    cout << "Secret (c) from Testcase 2 = " << bigIntToStr(lagrange(x, y)) << endl;
+
+    return static_cast<long long>(round(f0));
 }
 
 int main() {
-    solve1();
-    solve2();
+    long long secret1 = computeSecretFromJSON("input1.json");
+    long long secret2 = computeSecretFromJSON("input2.json");
+
+    std::cout << "Secret from Test Case 1: " << secret1 << std::endl;
+    std::cout << "Secret from Test Case 2: " << secret2 << std::endl;
+
     return 0;
 }
